@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StockFlow User - Support Ready</title>
+    <title>StockFlow User - Final Precision</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -27,15 +27,15 @@
         .glass-header { background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .no-select { user-select: none; -webkit-user-select: none; }
 
-        /* Floating WhatsApp Style */
+        /* Floating WhatsApp */
         .wa-float { position: fixed; bottom: 100px; right: 24px; z-index: 45; }
+        .badge-history { background: #6366f1; color: white; padding: 2px 8px; border-radius: 8px; font-size: 9px; font-weight: 800; }
     </style>
 </head>
 <body class="text-slate-900">
 
-    <a href="https://wa.me/6283875048659?text=Halo%20Admin%2C%20saya%20ingin%20bertanya%20mengenai%20StockFlow..." 
-       target="_blank" 
-       class="wa-float w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-emerald-200 click-active">
+    <a href="https://wa.me/6283875048659?text=Halo%20Admin%2C%20ada%20kendala%20saat%20input%20data%20StockFlow..." 
+       target="_blank" class="wa-float w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-2xl click-active">
         <i class="fab fa-whatsapp text-2xl"></i>
     </a>
 
@@ -55,7 +55,7 @@
     <main class="p-6">
         <div class="mb-6 relative">
             <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-            <input type="text" id="searchInput" placeholder="Cari barang..." 
+            <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari barang..." 
                    class="w-full bg-white border-none rounded-3xl py-5 pl-14 shadow-sm font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
         <div id="itemList" class="space-y-4 pb-32">
@@ -85,7 +85,7 @@
 
     <script>
         const API_URL = 'https://sheetdb.io/api/v1/n42lfid7z6tlv';
-        let allItems = [], currentTab = 'db', searchTimeout;
+        let allItems = [], currentTab = 'db';
 
         // SWIPE ENGINE
         const modal = document.getElementById('modalContent');
@@ -103,7 +103,7 @@
         window.addEventListener('mousemove', moveDrag);
         window.addEventListener('mouseup', endDrag);
 
-        // DATA ENGINE
+        // DATA LOGIC
         async function loadData() {
             const icon = document.getElementById('syncIcon');
             if(icon) icon.classList.add('fa-spin');
@@ -111,7 +111,7 @@
                 const res = await fetch(API_URL);
                 allItems = await res.json();
                 filterData();
-            } catch (e) { console.error("Offline"); }
+            } catch (e) { console.error("Koneksi bermasalah."); }
             finally { if(icon) icon.classList.remove('fa-spin'); }
         }
 
@@ -127,22 +127,32 @@
             let data = [];
             if (currentTab === 'db') {
                 const seen = new Set();
-                data = allItems.filter(i => { const id = i.item_id || i.ItemID; if (seen.has(id)) return false; seen.add(id); return true; });
+                data = allItems.filter(i => {
+                    const id = i.item_id || i.ItemID || i.itemID || i["Item ID"];
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
             } else {
-                data = allItems.filter(i => (i.tgl_expired || i.TglExpired || "").length > 5);
+                data = allItems.filter(i => (i.tgl_expired || i.TglExpired || i.tglExpired || i["Tanggal Expired"] || "").length > 5);
             }
-            const filtered = data.filter(i => (i.produk || i.Produk || "").toLowerCase().includes(q) || (i.item_id || i.ItemID || "").toString().includes(q));
+            const filtered = data.filter(i => {
+                const nama = i.produk || i.Produk || i["Nama Produk"] || "";
+                const id = i.item_id || i.ItemID || "";
+                return nama.toLowerCase().includes(q) || id.toString().includes(q);
+            });
             renderItems(filtered);
         }
 
         function renderItems(data) {
             const container = document.getElementById('itemList');
-            if (!data.length) { container.innerHTML = `<div class="text-center py-20 text-slate-300 font-bold italic tracking-widest">Kosong</div>`; return; }
+            if (!data.length) { container.innerHTML = `<div class="text-center py-20 text-slate-300 font-bold italic">Kosong</div>`; return; }
             container.innerHTML = data.map(i => {
-                const id = i.item_id || i.ItemID;
-                const nama = i.produk || i.Produk;
+                const id = i.item_id || i.ItemID || i["Item ID"];
+                const nama = i.produk || i.Produk || i["Nama Produk"];
                 const stok = i.stok || i.Stok || 0;
-                const exp = i.tgl_expired || i.TglExpired || "-";
+                const exp = i.tgl_expired || i.TglExpired || i["Tanggal Expired"] || "-";
+
                 return `
                 <div class="bg-white p-5 rounded-[30px] flex items-center justify-between shadow-sm active:bg-slate-50 transition-all" 
                      onclick="openModal('${id}', '${nama}', '${i.vendor || ''}')">
@@ -152,7 +162,7 @@
                             <h4 class="font-bold text-slate-800 text-[13px] leading-tight uppercase">${nama}</h4>
                             <div class="flex items-center gap-2 mt-1">
                                 <p class="text-[9px] text-slate-400 font-black tracking-widest">ID: #${id}</p>
-                                ${currentTab === 'res' ? `<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-md text-[8px] font-bold">${exp}</span>` : ''}
+                                ${currentTab === 'res' ? `<span class="badge-history italic">${exp}</span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -167,21 +177,42 @@
             }).join('');
         }
 
+        // --- THE PRECISION DELETE ENGINE ---
         async function deleteSingleBatch(e, id, exp, stok) {
             e.stopPropagation();
-            if (!confirm("Hapus baris ini?")) return;
+            if (!confirm("Hapus 1 baris data ini dari Google Sheets?")) return;
+            
             const btn = e.currentTarget;
+            const originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            btn.disabled = true;
+
+            // Kita cari nama kolom secara dinamis dari item pertama
+            const sample = allItems[0];
+            const colId = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'itemid') || 'item_id';
+            const colExp = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'tglexpired') || 'tgl_expired';
+            const colStok = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'stok') || 'stok';
+
             try {
-                const url = `${API_URL}/item_id/${encodeURIComponent(id)}?tgl_expired=${encodeURIComponent(exp)}&stok=${encodeURIComponent(stok)}&limit=1`;
+                // Gunakan URL DELETE dengan kriteria lengkap + limit=1
+                const url = `${API_URL}/${colId}/${encodeURIComponent(id)}?${colExp}=${encodeURIComponent(exp)}&${colStok}=${encodeURIComponent(stok)}&limit=1`;
+                
                 const res = await fetch(url, { method: 'DELETE' });
-                if (res.ok) {
-                    const idx = allItems.findIndex(i => (i.item_id == id || i.ItemID == id) && (i.tgl_expired == exp || i.TglExpired == exp) && (i.stok == stok || i.Stok == stok));
-                    if (idx > -1) allItems.splice(idx, 1);
-                    filterData();
+                const result = await res.json();
+
+                if (res.ok && result.deleted > 0) {
+                    // Jika berhasil di server, baru hapus di memori lokal
+                    await loadData();
+                } else {
+                    alert("Gagal menghapus! Pastikan judul kolom di Excel adalah 'item_id', 'tgl_expired', dan 'stok'.");
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
                 }
-            } catch (err) { alert("Gagal!"); }
-            finally { btn.innerHTML = '<i class="fas fa-trash-alt text-xs"></i>'; }
+            } catch (err) {
+                alert("Kesalahan Jaringan / API!");
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
         }
 
         function openModal(id, nama, vendor) {
@@ -218,7 +249,22 @@
             e.preventDefault();
             const btn = document.getElementById('saveBtn');
             btn.innerText = 'MEMPROSES...'; btn.disabled = true;
-            const payload = { "item_id": document.getElementById('formId').value, "produk": document.getElementById('formNama').value, "stok": document.getElementById('fStok').value, "vendor": document.getElementById('formVendor').value, "tgl_expired": document.getElementById('fExp').value };
+            
+            // Samakan payload dengan kolom yang ada di filter
+            const sample = allItems[0];
+            const colId = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'itemid') || 'item_id';
+            const colProduk = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'produk') || 'produk';
+            const colStok = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'stok') || 'stok';
+            const colExp = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'tglexpired') || 'tgl_expired';
+            const colVendor = Object.keys(sample).find(k => k.toLowerCase().replace(/ /g, '') === 'vendor') || 'vendor';
+
+            const payload = {};
+            payload[colId] = document.getElementById('formId').value;
+            payload[colProduk] = document.getElementById('formNama').value;
+            payload[colStok] = document.getElementById('fStok').value;
+            payload[colVendor] = document.getElementById('formVendor').value;
+            payload[colExp] = document.getElementById('fExp').value;
+
             try {
                 const res = await fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                 if(res.ok) { closeModal(); await loadData(); switchTab('res'); }
