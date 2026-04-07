@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>StockFlow User - Original Swipe Feel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+        
+        .click-active:active { transform: scale(0.95); transition: 0.1s; }
+        
+        /* MODAL BASE */
+        .sheet-container { 
+            transform: translate3d(0, 105%, 0); 
+            will-change: transform; 
+            cursor: grab;
+            touch-action: none; /* Penting: Mematikan scroll bawaan saat pegang modal */
+        }
+        .sheet-container:active { cursor: grabbing; }
+        
+        /* Snap Animation */
+        .snap-anim { transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1) !important; }
+        
+        .glass-header { background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .no-select { user-select: none; -webkit-user-select: none; }
+        .no-scroll { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
+    </style>
+</head>
+<body class="text-slate-900">
+
+    <header class="glass-header text-white p-6 pb-8 rounded-b-[40px] sticky top-0 z-40 shadow-xl">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-xl font-black italic tracking-tighter">StockFlow <span class="text-indigo-400">User</span></h1>
+            <button onclick="loadData()" class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center click-active">
+                <i class="fas fa-sync-alt text-xs" id="syncIcon"></i>
+            </button>
+        </div>
+        <div class="bg-black/20 p-1 rounded-2xl flex gap-1 text-[10px] font-black uppercase tracking-widest">
+            <button onclick="switchTab('db')" id="tabDB" class="flex-1 py-4 rounded-xl bg-indigo-600 text-white shadow-lg transition-all">Database</button>
+            <button onclick="switchTab('res')" id="tabRes" class="flex-1 py-4 rounded-xl text-slate-400 transition-all">History</button>
+        </div>
+    </header>
+
+    <main class="p-6">
+        <div class="mb-6 relative">
+            <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="text" id="searchInput" placeholder="Cari barang..." 
+                   class="w-full bg-white border-none rounded-3xl py-5 pl-14 shadow-sm font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div id="itemList" class="space-y-4 pb-24">
+            <div class="text-center py-20 opacity-10"><i class="fas fa-circle-notch fa-spin text-3xl"></i></div>
+        </div>
+    </main>
+
+    <div id="modalOverlay" onclick="handleOverlayClick(event)" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 hidden opacity-0 transition-opacity duration-300 flex items-end">
+        
+        <div id="modalContent" class="sheet-container bg-white w-full rounded-t-[50px] p-8 pb-12 shadow-2xl">
+            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8"></div>
+            
+            <div class="mb-8 text-center pointer-events-none no-select">
+                <h3 id="mNama" class="text-2xl font-black text-slate-900 uppercase">Produk</h3>
+                <p id="mIdDisplay" class="text-[10px] font-black text-indigo-500 mt-2 tracking-widest italic">ID: #000</p>
+            </div>
+            
+            <form id="updateForm" class="space-y-6">
+                <input type="hidden" id="formId"><input type="hidden" id="formNama"><input type="hidden" id="formVendor">
+                
+                <div class="bg-slate-50 rounded-[30px] p-2 border border-slate-100 flex items-center justify-between">
+                    <button type="button" onclick="adjustStok(-1)" class="w-14 h-14 bg-white rounded-2xl shadow-sm text-indigo-600 font-bold click-active"><i class="fas fa-minus"></i></button>
+                    <input type="number" id="fStok" class="bg-transparent text-center font-black text-4xl w-24 border-none focus:ring-0" value="1">
+                    <button type="button" onclick="adjustStok(1)" class="w-14 h-14 bg-white rounded-2xl shadow-sm text-indigo-600 font-bold click-active"><i class="fas fa-plus"></i></button>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 italic">Tanggal Expired</label>
+                    <input type="date" id="fExp" required class="w-full bg-slate-50 p-5 rounded-[25px] font-bold text-center text-slate-800 border border-slate-100 outline-none">
+                </div>
+                
+                <button type="submit" id="saveBtn" class="w-full py-6 bg-indigo-600 text-white rounded-[30px] font-black shadow-xl click-active uppercase tracking-widest italic">Simpan Batch</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://sheetdb.io/api/v1/n42lfid7z6tlv';
+        let allItems = [], currentTab = 'db', searchTimeout;
+
+        // --- SWIPE ENGINE ULTIMATE (MOUSE & TOUCH) ---
+        const modal = document.getElementById('modalContent');
+        const overlay = document.getElementById('modalOverlay');
+        let startY = 0, currentY = 0, isDragging = false;
+
+        function startDrag(e) {
+            if (e.target.closest('button') || e.target.closest('input')) return;
+            isDragging = true;
+            startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+            modal.classList.remove('snap-anim');
+            document.body.classList.add('no-select');
+        }
+
+        function moveDrag(e) {
+            if (!isDragging) return;
+            currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+            const deltaY = currentY - startY;
+
+            if (deltaY > 0) {
+                // Tarik ke bawah (Lancar)
+                modal.style.transform = `translate3d(0, ${deltaY}px, 0)`;
+                overlay.style.opacity = Math.max(0, 1 - (deltaY / 400));
+            } else {
+                // Tarik ke atas (Ada tahanan/Rubber band)
+                modal.style.transform = `translate3d(0, ${deltaY * 0.2}px, 0)`;
+            }
+        }
+
+        function endDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+            document.body.classList.remove('no-select');
+            modal.classList.add('snap-anim');
+            
+            const deltaY = currentY - startY;
+            if (deltaY > 120) {
+                closeModal();
+            } else {
+                modal.style.transform = 'translate3d(0, 0, 0)';
+                overlay.style.opacity = '1';
+            }
+            startY = 0; currentY = 0;
+        }
+
+        modal.addEventListener('touchstart', startDrag, { passive: true });
+        window.addEventListener('touchmove', moveDrag, { passive: false });
+        window.addEventListener('touchend', endDrag);
+
+        modal.addEventListener('mousedown', startDrag);
+        window.addEventListener('mousemove', moveDrag);
+        window.addEventListener('mouseup', endDrag);
+
+        // --- DATA & DASHBOARD ENGINE ---
+        async function loadData() {
+            const icon = document.getElementById('syncIcon');
+            if(icon) icon.classList.add('fa-spin');
+            try {
+                const res = await fetch(API_URL);
+                allItems = await res.json();
+                filterData();
+            } catch (e) { console.error("Offline"); }
+            finally { if(icon) icon.classList.remove('fa-spin'); }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('tabDB').className = tab === 'db' ? "flex-1 py-4 rounded-xl bg-indigo-600 text-white shadow-lg transition-all" : "flex-1 py-4 rounded-xl text-slate-400 transition-all";
+            document.getElementById('tabRes').className = tab === 'res' ? "flex-1 py-4 rounded-xl bg-indigo-600 text-white shadow-lg transition-all" : "flex-1 py-4 rounded-xl text-slate-400 transition-all";
+            filterData();
+        }
+
+        function filterData() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            let data = [];
+            if (currentTab === 'db') {
+                const seen = new Set();
+                data = allItems.filter(i => { const id = i.item_id || i.ItemID; if (seen.has(id)) return false; seen.add(id); return true; });
+            } else {
+                data = allItems.filter(i => (i.tgl_expired || i.TglExpired || "").length > 5);
+            }
+            const filtered = data.filter(i => (i.produk || i.Produk || "").toLowerCase().includes(q) || (i.item_id || i.ItemID || "").toString().includes(q));
+            renderItems(filtered);
+        }
+
+        function renderItems(data) {
+            const container = document.getElementById('itemList');
+            if (!data.length) { container.innerHTML = `<div class="text-center py-20 text-slate-300 font-bold italic">Kosong</div>`; return; }
+            container.innerHTML = data.map(i => {
+                const id = i.item_id || i.ItemID;
+                const nama = i.produk || i.Produk;
+                const stok = i.stok || i.Stok || 0;
+                const exp = i.tgl_expired || i.TglExpired || "-";
+                return `
+                <div class="item-card p-5 rounded-[30px] flex items-center justify-between shadow-sm active:bg-slate-50 transition-all" 
+                     onclick="openModal('${id}', '${nama}', '${i.vendor || ''}')">
+                    <div class="flex items-center gap-4 flex-1">
+                        <div class="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center shadow-inner"><i class="fas fa-box text-lg"></i></div>
+                        <div>
+                            <h4 class="font-bold text-slate-800 text-[13px] leading-tight uppercase">${nama}</h4>
+                            <div class="flex items-center gap-2 mt-1">
+                                <p class="text-[9px] text-slate-400 font-black tracking-widest">ID: #${id}</p>
+                                ${currentTab === 'res' ? `<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-md text-[8px] font-bold">${exp}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${currentTab === 'res' ? 
+                            `<span class="font-black text-indigo-600 mr-2">${stok}</span>
+                             <button onclick="deleteSingleBatch(event, '${id}', '${exp}', '${stok}')" class="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center click-active">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                             </button>` : `<i class="fas fa-plus-circle text-indigo-200 text-xl"></i>`}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function deleteSingleBatch(e, id, exp, stok) {
+            e.stopPropagation();
+            if (!confirm("Hapus baris ini?")) return;
+            const btn = e.currentTarget;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            try {
+                const url = `${API_URL}/item_id/${encodeURIComponent(id)}?tgl_expired=${encodeURIComponent(exp)}&stok=${encodeURIComponent(stok)}&limit=1`;
+                const res = await fetch(url, { method: 'DELETE' });
+                if (res.ok) {
+                    const idx = allItems.findIndex(i => (i.item_id == id || i.ItemID == id) && (i.tgl_expired == exp || i.TglExpired == exp) && (i.stok == stok || i.Stok == stok));
+                    if (idx > -1) allItems.splice(idx, 1);
+                    filterData();
+                }
+            } catch (err) { alert("Gagal!"); }
+            finally { btn.innerHTML = '<i class="fas fa-trash-alt text-xs"></i>'; }
+        }
+
+        function openModal(id, nama, vendor) {
+            if (currentTab === 'res') return;
+            
+            // Reset position
+            modal.classList.remove('snap-anim');
+            modal.style.transform = 'translate3d(0, 105%, 0)';
+            
+            document.getElementById('formId').value = id;
+            document.getElementById('formNama').value = nama;
+            document.getElementById('formVendor').value = vendor;
+            document.getElementById('mIdDisplay').innerText = "INPUT BATCH: #" + id;
+            document.getElementById('mNama').innerText = nama;
+            document.getElementById('fStok').value = 1;
+            document.getElementById('fExp').value = "";
+            
+            overlay.classList.remove('hidden');
+            document.body.classList.add('no-scroll');
+            
+            setTimeout(() => { 
+                overlay.style.opacity = '1'; 
+                modal.classList.add('snap-anim');
+                modal.style.transform = 'translate3d(0, 0, 0)'; 
+            }, 10);
+        }
+
+        function closeModal() {
+            modal.classList.add('snap-anim');
+            modal.style.transform = 'translate3d(0, 105%, 0)';
+            overlay.style.opacity = '0';
+            setTimeout(() => { 
+                overlay.classList.add('hidden'); 
+                document.body.classList.remove('no-scroll');
+            }, 400);
+        }
+
+        function handleOverlayClick(e) { if (e.target === overlay) closeModal(); }
+        function adjustStok(v) { const el = document.getElementById('fStok'); el.value = Math.max(1, parseInt(el.value) + v); }
+
+        document.getElementById('updateForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('saveBtn');
+            btn.innerText = 'MEMPROSES...'; btn.disabled = true;
+            const payload = { "item_id": document.getElementById('formId').value, "produk": document.getElementById('formNama').value, "stok": document.getElementById('fStok').value, "vendor": document.getElementById('formVendor').value, "tgl_expired": document.getElementById('fExp').value };
+            try {
+                const res = await fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                if(res.ok) { closeModal(); await loadData(); switchTab('res'); }
+            } catch (err) { alert("Gagal!"); }
+            finally { btn.innerText = 'Simpan Batch'; btn.disabled = false; }
+        };
+
+        loadData();
+    </script>
+</body>
+</html>

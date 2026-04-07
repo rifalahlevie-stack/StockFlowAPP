@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockFlow Admin v5.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f4f7fe; }
+        .sidebar-active { background: #6366f1; color: white; box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4); }
+        tr:hover { background-color: #f8fafc; transition: 0.2s; }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="flex h-screen overflow-hidden">
+        <aside class="w-72 bg-[#0b1437] text-white flex flex-col shadow-2xl">
+            <div class="p-8 border-b border-white/5 flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg"><i class="fas fa-layer-group"></i></div>
+                <span class="text-xl font-bold tracking-tighter italic">StockFlow <span class="text-indigo-400">Admin</span></span>
+            </div>
+            <nav class="p-6 flex flex-col gap-3">
+                <button onclick="showSection('master')" id="btnMaster" class="p-4 rounded-2xl flex items-center gap-4 transition-all sidebar-active">
+                    <i class="fas fa-database text-sm"></i> <span class="font-bold text-xs uppercase tracking-widest">Master Database</span>
+                </button>
+                <button onclick="showSection('report')" id="btnReport" class="p-4 rounded-2xl flex items-center gap-4 transition-all text-slate-400 hover:bg-white/5">
+                    <i class="fas fa-file-invoice text-sm"></i> <span class="font-bold text-xs uppercase tracking-widest">Laporan LENGKAP</span>
+                </button>
+            </nav>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white px-10 py-8 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h2 id="sectionTitle" class="text-3xl font-extrabold text-[#1b2559]">Master Database</h2>
+                    <p id="sectionDesc" class="text-[10px] text-slate-400 font-bold uppercase tracking-[3px] mt-1">Status: OKE & LIMIT</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <select id="statusFilter" onchange="renderTable()" class="hidden bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl font-bold text-[11px] outline-none">
+                        <option value="ALL">SEMUA KUALITAS</option>
+                        <option value="AMAN">KUALITAS: AMAN</option>
+                        <option value="RETUR">KUALITAS: RETUR</option>
+                        <option value="BROKEN">KUALITAS: BROKEN</option>
+                    </select>
+                    <button id="exportBtn" onclick="exportExcel()" class="hidden bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-[11px] shadow-lg active:scale-95 transition-all">
+                        <i class="fas fa-file-excel mr-2"></i> EXPORT
+                    </button>
+                    <button onclick="fetchCloudData()" class="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-[11px] shadow-lg active:scale-95 transition-all">
+                        <i class="fas fa-sync-alt mr-2" id="refreshIcon"></i> REFRESH
+                    </button>
+                </div>
+            </header>
+
+            <main class="p-10 overflow-y-auto">
+                <div class="bg-white rounded-[35px] shadow-sm border border-slate-100 overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead id="tableHead" class="bg-slate-50/50 border-b border-slate-100 font-black text-slate-400 text-[10px] uppercase tracking-widest"></thead>
+                        <tbody id="tableBody" class="text-sm divide-y divide-slate-50 font-medium"></tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://sheetdb.io/api/v1/n42lfid7z6tlv';
+        let cachedData = [], currentMode = 'master';
+
+        async function fetchCloudData() {
+            const icon = document.getElementById('refreshIcon');
+            icon.classList.add('fa-spin');
+            try {
+                const res = await fetch(API_URL);
+                cachedData = await res.json();
+                renderTable();
+            } catch (err) { console.error("Cloud Error"); }
+            finally { setTimeout(() => icon.classList.remove('fa-spin'), 500); }
+        }
+
+        function calculateQuality(dateStr) {
+            if (!dateStr || dateStr === "-") return { txt: "NO DATA", cls: "bg-slate-100 text-slate-400" };
+            const now = new Date(), exp = new Date(dateStr);
+            const diffMonths = (exp - now) / (1000 * 60 * 60 * 24 * 30.44);
+            if (exp < now) return { txt: "BROKEN", cls: "bg-rose-100 text-rose-600" };
+            if (diffMonths <= 3) return { txt: "RETUR", cls: "bg-amber-100 text-amber-600" };
+            return { txt: "AMAN", cls: "bg-emerald-100 text-emerald-600" };
+        }
+
+        function showSection(mode) {
+            currentMode = mode;
+            document.getElementById('sectionTitle').innerText = mode === 'master' ? 'Master Database' : 'Laporan LENGKAP';
+            document.getElementById('statusFilter').classList.toggle('hidden', mode === 'master');
+            document.getElementById('exportBtn').classList.toggle('hidden', mode === 'master');
+            document.getElementById('btnMaster').classList.toggle('sidebar-active', mode === 'master');
+            document.getElementById('btnReport').classList.toggle('sidebar-active', mode === 'report');
+            renderTable();
+        }
+
+        function renderTable() {
+            const thead = document.getElementById('tableHead'), tbody = document.getElementById('tableBody');
+            const filterVal = document.getElementById('statusFilter').value;
+            let data = [...cachedData];
+
+            if (currentMode === 'master') {
+                const seen = new Set();
+                data = data.filter(i => { const id = i.item_id; if (seen.has(id)) return false; seen.add(id); return true; });
+                thead.innerHTML = `<tr><th class="px-8 py-5">Item ID</th><th class="px-8 py-5">Produk</th><th class="px-8 py-5 text-center">Stok</th><th class="px-8 py-5 text-center">Status</th></tr>`;
+            } else {
+                data = data.filter(i => (i.tgl_expired || "").length > 5).map(i => ({...i, q: calculateQuality(i.tgl_expired)}));
+                if(filterVal !== "ALL") data = data.filter(i => i.q.txt === filterVal);
+                thead.innerHTML = `<tr><th class="px-8 py-6">ID</th><th class="px-8 py-6">Produk</th><th class="px-8 py-6 text-center">Qty Batch</th><th class="px-8 py-6 text-indigo-600">Expired</th><th class="px-8 py-6 text-center">Status</th><th class="px-8 py-6 text-center">Hapus 1 Baris</th></tr>`;
+            }
+
+            tbody.innerHTML = data.map(i => {
+                if (currentMode === 'master') {
+                    const sc = parseInt(i.stok) < 10 ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-600';
+                    return `<tr class="border-b border-slate-50"><td class="px-8 py-5 font-bold text-indigo-600">#${i.item_id}</td><td class="px-8 py-5 font-extrabold uppercase">${i.produk}</td><td class="px-8 py-5 text-center font-black text-xl">${i.stok}</td><td class="px-8 py-5 text-center"><span class="px-3 py-1 rounded-lg text-[9px] font-black ${sc}">${parseInt(i.stok) < 10 ? 'LIMIT' : 'OKE'}</span></td></tr>`;
+                } else {
+                    return `<tr class="border-b border-slate-50"><td class="px-8 py-5 font-bold text-indigo-600">#${i.item_id}</td><td class="px-8 py-5 font-extrabold uppercase">${i.produk}</td><td class="px-8 py-5 text-center font-black text-xl">${i.stok}</td><td class="px-8 py-5 font-bold text-indigo-600 bg-indigo-50/30">${i.tgl_expired}</td><td class="px-8 py-5 text-center"><span class="px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest ${i.q.cls}">${i.q.txt}</span></td><td class="px-8 py-5 text-center"><button onclick="deleteSingleRow(event, '${i.item_id}', '${i.tgl_expired}', '${i.stok}')" class="text-rose-400 p-2 hover:text-rose-600 active:scale-75 transition-all"><i class="fas fa-trash-alt"></i></button></td></tr>`;
+                }
+            }).join('');
+        }
+
+        async function deleteSingleRow(e, id, exp, stok) {
+            if (!confirm("Hapus 1 baris batch ini?")) return;
+            const btn = e.currentTarget;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            try {
+                // Precision Delete: ID + EXP + STOK + Limit=1
+                const url = `${API_URL}/item_id/${encodeURIComponent(id)}?tgl_expired=${encodeURIComponent(exp)}&stok=${stok}&limit=1`;
+                const res = await fetch(url, { method: 'DELETE' });
+                if (res.ok) {
+                    const idx = cachedData.findIndex(i => i.item_id == id && i.tgl_expired == exp && i.stok == stok);
+                    if (idx > -1) cachedData.splice(idx, 1);
+                    renderTable();
+                }
+            } catch (err) { alert("Error"); }
+            finally { btn.innerHTML = '<i class="fas fa-trash-alt"></i>'; }
+        }
+
+        function exportExcel() {
+            const d = cachedData.filter(i => (i.tgl_expired || "").length > 5).map(i => ({ ID: i.item_id, Produk: i.produk, Stok: i.stok, Expired: i.tgl_expired, Kualitas: calculateQuality(i.tgl_expired).txt }));
+            const ws = XLSX.utils.json_to_sheet(d); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Audit"); XLSX.writeFile(wb, "StockFlow_Report.xlsx");
+        }
+
+        fetchCloudData();
+    </script>
+</body>
+</html>
