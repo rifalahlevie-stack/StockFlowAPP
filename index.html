@@ -3,130 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StockFlow User - Clean Version</title>
+    <title>StockFlow User - Enterprise</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
         .click-active:active { transform: scale(0.95); transition: 0.1s; }
-        .sheet-container { transform: translate3d(0, 105%, 0); transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; cursor: grab; touch-action: none; }
-        .sheet-up { transform: translate3d(0, 0, 0) !important; }
+        .sheet-container { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-radius: 40px 40px 0 0; padding: 30px; z-index: 100; transform: translateY(105%); transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; cursor: grab; touch-action: none; }
+        .sheet-up { transform: translateY(0); }
         .is-dragging { transition: none !important; }
         .glass-header { background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-        .wa-float { position: fixed; bottom: 30px; right: 24px; z-index: 45; }
+        .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); z-index: 90; display: none; opacity: 0; transition: opacity 0.3s; }
         .no-scroll { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
     </style>
 </head>
 <body>
 
-    <a href="https://wa.me/6283875048659" target="_blank" class="wa-float w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-2xl click-active"><i class="fab fa-whatsapp text-2xl"></i></a>
+    <a href="https://wa.me/6283875048659" target="_blank" class="fixed bottom-6 right-6 w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-2xl z-50 click-active"><i class="fab fa-whatsapp text-2xl"></i></a>
 
     <header class="glass-header text-white p-6 pb-8 rounded-b-[40px] sticky top-0 z-40 shadow-xl">
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-xl font-black italic tracking-tighter uppercase">StockFlow <span class="text-indigo-400">User</span></h1>
+            <h1 class="text-xl font-black italic uppercase tracking-tighter">StockFlow <span class="text-indigo-400">User</span></h1>
             <button onclick="loadData()" class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center click-active"><i class="fas fa-sync-alt text-xs" id="syncIcon"></i></button>
         </div>
-        <div class="bg-black/20 p-1 rounded-2xl flex gap-1 text-[10px] font-black uppercase tracking-widest">
+        <div class="bg-black/20 p-1 rounded-2xl flex gap-1 text-[10px] font-black uppercase">
             <button onclick="switchTab('db')" id="tabDB" class="flex-1 py-4 rounded-xl bg-indigo-600 shadow-lg transition-all">Database</button>
             <button onclick="switchTab('res')" id="tabRes" class="flex-1 py-4 rounded-xl text-slate-400 transition-all">History</button>
         </div>
     </header>
 
     <main class="p-6">
-        <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari barang..." class="w-full bg-white border-none rounded-3xl py-5 px-8 shadow-sm font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500">
-        <div id="itemList" class="space-y-4 py-8 pb-32"></div>
+        <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari nama produk..." class="w-full bg-white border-none rounded-3xl py-5 px-8 shadow-sm font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500 mb-6">
+        <div id="itemList" class="space-y-4 pb-32"></div>
     </main>
 
-    <div id="modalOverlay" onclick="closeModal()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 hidden opacity-0 transition-opacity duration-300 flex items-end">
-        <div id="modalContent" onclick="event.stopPropagation()" class="sheet-container bg-white w-full rounded-t-[50px] p-8 pb-12 shadow-2xl">
-            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8"></div>
-            <div class="mb-8 text-center"><h3 id="mNama" class="text-2xl font-black text-slate-900 uppercase">Produk</h3><p id="mId" class="text-[10px] font-black text-indigo-500 mt-2 italic uppercase">ID</p></div>
-            <form id="formIn" class="space-y-6">
-                <input type="hidden" id="fId"><input type="hidden" id="fNama"><input type="hidden" id="fVendor">
-                <div class="bg-slate-50 rounded-[30px] p-2 border flex items-center justify-between shadow-inner">
-                    <button type="button" onclick="adj(-1)" class="w-14 h-14 bg-white rounded-2xl shadow-sm text-indigo-600 font-bold click-active"><i class="fas fa-minus"></i></button>
-                    <input type="number" id="fStok" class="bg-transparent text-center font-black text-4xl w-24 border-none outline-none" value="1">
-                    <button type="button" onclick="adj(1)" class="w-14 h-14 bg-white rounded-2xl shadow-sm text-indigo-600 font-bold click-active"><i class="fas fa-plus"></i></button>
-                </div>
-                <input type="date" id="fExp" required class="w-full bg-slate-50 p-5 rounded-[25px] font-bold text-center border outline-none">
-                <button type="submit" id="btnSave" class="w-full py-6 bg-indigo-600 text-white rounded-[30px] font-black shadow-xl click-active uppercase italic tracking-widest">Simpan Batch</button>
-            </form>
-        </div>
+    <div id="overlay" class="overlay" onclick="closeModal()"></div>
+    <div id="modal" class="sheet-container">
+        <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8"></div>
+        <h3 id="mNama" class="text-2xl font-black text-center uppercase">Produk</h3>
+        <p id="mId" class="text-center text-indigo-500 text-[10px] font-black tracking-widest uppercase mb-8">ID</p>
+        <form id="formIn" class="space-y-6">
+            <input type="hidden" id="fId"><input type="hidden" id="fNama"><input type="hidden" id="fVendor">
+            <div class="bg-slate-50 rounded-[30px] p-2 border flex items-center justify-between">
+                <button type="button" onclick="adj(-1)" class="w-14 h-14 bg-white rounded-2xl shadow-sm text-indigo-600 font-black">-</button>
+                <input type="number" id="fStok" class="bg-transparent text-center font-black text-4xl w-24 border-none outline-none" value="1">
+                <button type="button" onclick="adj(1)" class="w-14 h-14 bg-white rounded-2xl shadow-sm text-indigo-600 font-black">+</button>
+            </div>
+            <input type="date" id="fExp" required class="w-full bg-slate-50 p-5 rounded-[25px] font-bold text-center border outline-none">
+            <button type="submit" id="btnSave" class="w-full py-6 bg-indigo-600 text-white rounded-[30px] font-black shadow-xl uppercase italic tracking-widest">Simpan Batch</button>
+        </form>
     </div>
 
     <script>
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxAEaP9LP2eif_iwp-71r2nREnyR95dRxZrbD52nRFwAPLydqNQtf6jbV-mJo5tAmTZ/exec'; 
-        let allData = [], currentTab = 'db', startY = 0, isDragging = false;
-        const modal = document.getElementById('modalContent');
-        const overlay = document.getElementById('modalOverlay');
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyoagMz3yOEI-At8tw9NDP_DKK90CMZWXlhBO6GZ9llIh36Zxzw9Px0Gl5uZYZziR0/exec'; 
+        let allData = [], currentTab = 'db', isDeleting = false;
 
-        // PHYSICS
-        function start(e) { if (e.target.closest('button') || e.target.closest('input')) return; isDragging = true; startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY; modal.classList.add('is-dragging'); }
-        function move(e) { if (!isDragging) return; const curY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY; const dY = curY - startY; if (dY > 0) { modal.style.transform = `translate3d(0, ${dY}px, 0)`; overlay.style.opacity = Math.max(0, 1 - (dY / 400)); } }
-        function end() { if (!isDragging) return; isDragging = false; modal.classList.remove('is-dragging'); modal.style.transform = ''; overlay.style.opacity = ''; closeModal(); }
-        modal.addEventListener('touchstart', start, {passive: true}); window.addEventListener('touchmove', move, {passive: false}); window.addEventListener('touchend', end);
+        // FUNGSI BALIK TANGGAL (Indo)
+        const toIndoDate = (str) => { if(!str.includes('-')) return str; const [y,m,d] = str.split('-'); return `${d}-${m}-${y}`; };
 
         async function loadData() {
             document.getElementById('syncIcon').classList.add('fa-spin');
             try {
                 const res = await fetch(API_URL);
                 allData = await res.json();
-                localStorage.setItem('stock_cache', JSON.stringify(allData));
+                localStorage.setItem('sf_cache', JSON.stringify(allData));
                 filterData();
-            } catch (e) { console.error("Error"); }
+            } catch (e) { console.error("Sync Error"); }
             finally { document.getElementById('syncIcon').classList.remove('fa-spin'); }
         }
 
         function filterData() {
             const q = document.getElementById('searchInput').value.toLowerCase();
-            let data = currentTab === 'db' ? allData.filter((v,i,a) => a.findIndex(t => (t.item_id === v.item_id)) === i) : allData.filter(i => (i.tgl_expired || "").length > 5);
-            render(data.filter(i => i.produk.toLowerCase().includes(q) || i.item_id.includes(q)));
+            let data = currentTab === 'db' ? allData.filter((v,i,a) => a.findIndex(t => t.item_id === v.item_id) === i) : allData.filter(i => (i.tgl_expired || "").length > 5);
+            render(data.filter(i => (i.produk||"").toLowerCase().includes(q) || (i.item_id||"").includes(q)));
         }
 
         function render(data) {
             const list = document.getElementById('itemList');
+            list.innerHTML = "";
+            if(!data.length) { list.innerHTML = `<p class="text-center py-20 text-slate-300 italic font-bold">Data Kosong</p>`; return; }
             list.innerHTML = data.map(i => `
                 <div class="bg-white p-5 rounded-[30px] flex items-center justify-between shadow-sm active:bg-slate-50 transition-all" onclick="openModal('${i.item_id}', '${i.produk}', '${i.vendor||''}')">
                     <div class="flex items-center gap-4 flex-1">
                         <div class="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center shadow-inner"><i class="fas fa-box text-lg"></i></div>
-                        <div><h4 class="font-bold text-[13px] uppercase">${i.produk}</h4><p class="text-[9px] text-slate-400 font-bold">#${i.item_id} ${currentTab==='res'?'• '+i.tgl_expired:''}</p></div>
+                        <div><h4 class="font-bold text-[13px] uppercase text-slate-800">${i.produk}</h4><p class="text-[9px] text-slate-400 font-black tracking-widest">ID: #${i.item_id} ${currentTab==='res'?' • '+i.tgl_expired:''}</p></div>
                     </div>
-                    ${currentTab==='res'?`<div class="flex items-center gap-3"><span class="font-bold text-indigo-600 mr-2">${i.stok}</span><button onclick="del(event, '${i.item_id}', '${i.tgl_expired}', '${i.stok}')" class="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center click-active"><i class="fas fa-trash-alt text-xs"></i></button></div>`:'<i class="fas fa-plus-circle text-indigo-200 text-xl"></i>'}
+                    ${currentTab==='res'?`<div class="flex items-center gap-3"><span class="font-black text-indigo-600 mr-2">${i.stok}</span><button onclick="del(event, '${i.item_id}', '${i.tgl_expired}', '${i.stok}')" class="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center click-active"><i class="fas fa-trash-alt text-xs"></i></button></div>`:'<i class="fas fa-plus-circle text-indigo-200 text-xl"></i>'}
                 </div>`).join('');
         }
 
         async function del(e, id, exp, stok) {
-            e.stopPropagation(); if(!confirm("Hapus?")) return;
-            e.target.closest('button').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-            await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'DELETE', item_id: id, tgl_expired: exp, stok: stok }) });
-            loadData();
+            e.stopPropagation();
+            if(isDeleting || !confirm("Hapus 1 baris ini?")) return;
+            isDeleting = true;
+            const btn = e.target.closest('button'); btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action:'DELETE', item_id:id, tgl_expired:exp, stok:stok }) });
+                await loadData();
+            } catch(e) { alert("Gagal"); }
+            finally { isDeleting = false; }
         }
 
-        function openModal(id, nama, vendor) {
+        function openModal(id, nm, vn) {
             if(currentTab === 'res') return;
-            document.getElementById('fId').value = id; document.getElementById('fNama').value = nama; document.getElementById('fVendor').value = vendor;
-            document.getElementById('mNama').innerText = nama; document.getElementById('mId').innerText = "ID: #" + id;
+            document.getElementById('fId').value = id; document.getElementById('fNama').value = nm; document.getElementById('fVendor').value = vn;
+            document.getElementById('mNama').innerText = nm; document.getElementById('mId').innerText = "ID: #" + id;
             document.getElementById('fStok').value = 1; document.getElementById('fExp').value = "";
-            overlay.classList.remove('hidden'); document.body.classList.add('no-scroll');
-            setTimeout(() => { overlay.style.opacity = '1'; modal.classList.add('sheet-up'); }, 10);
+            document.getElementById('overlay').style.display = 'block';
+            document.body.classList.add('no-scroll');
+            setTimeout(() => { document.getElementById('overlay').style.opacity = '1'; document.getElementById('modal').classList.add('sheet-up'); }, 10);
         }
 
-        function closeModal() { modal.classList.remove('sheet-up'); overlay.style.opacity = '0'; setTimeout(() => { overlay.classList.add('hidden'); document.body.classList.remove('no-scroll'); }, 400); }
-        function adj(v) { const el = document.getElementById('fStok'); el.value = Math.max(1, parseInt(el.value) + v); }
+        function closeModal() {
+            document.getElementById('modal').classList.remove('sheet-up');
+            document.getElementById('overlay').style.opacity = '0';
+            setTimeout(() => { document.getElementById('overlay').style.display = 'none'; document.body.classList.remove('no-scroll'); }, 400);
+        }
+
+        function adj(v) { const el = document.getElementById('fStok'); el.value = Math.max(1, parseInt(el.value)+v); }
 
         document.getElementById('formIn').onsubmit = async (e) => {
             e.preventDefault();
-            const btn = document.getElementById('btnSave'); btn.innerText = 'MEMPROSES...';
-            const p = { item_id: document.getElementById('fId').value, produk: document.getElementById('fNama').value, stok: document.getElementById('fStok').value, vendor: document.getElementById('fVendor').value, tgl_expired: document.getElementById('fExp').value };
-            await fetch(API_URL, { method: 'POST', body: JSON.stringify(p) });
-            closeModal(); await loadData(); switchTab('res');
-            btn.innerText = 'SIMPAN BATCH';
+            const btn = document.getElementById('btnSave'); btn.innerText = 'MEMPROSES...'; btn.disabled = true;
+            const payload = { item_id: document.getElementById('fId').value, produk: document.getElementById('fNama').value, stok: document.getElementById('fStok').value, vendor: document.getElementById('fVendor').value, tgl_expired: toIndoDate(document.getElementById('fExp').value) };
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                closeModal(); await loadData(); switchTab('res');
+            } catch(e) { alert("Gagal"); }
+            finally { btn.innerText = 'SIMPAN BATCH'; btn.disabled = false; }
         };
-
-        const cached = localStorage.getItem('stock_cache');
-        if(cached) { allData = JSON.parse(cached); filterData(); }
-        loadData();
 
         function switchTab(t) {
             currentTab = t;
@@ -134,6 +140,10 @@
             document.getElementById('tabRes').className = t==='res' ? 'flex-1 py-4 rounded-xl bg-indigo-600 shadow-lg transition-all' : 'flex-1 py-4 rounded-xl text-slate-400 transition-all';
             filterData();
         }
+
+        const cache = localStorage.getItem('sf_cache');
+        if(cache) { allData = JSON.parse(cache); filterData(); }
+        loadData();
     </script>
 </body>
 </html>
